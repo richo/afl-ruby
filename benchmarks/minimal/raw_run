@@ -1,0 +1,7 @@
+#!/bin/bash
+
+export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+
+afl-fuzz -i ./benchmarks/minimal/input -o ./benchmarks/minimal/output \
+  -- ~/.rbenv/versions/2.4.1/bin/ruby \
+  ./benchmarks/minimal/raw_harness.rb

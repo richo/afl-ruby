@@ -1,0 +1,12 @@
+benchmarks/minimal/output/*
+
+example/work/output/*
+
+lib/afl/afl.bundle
+lib/afl/afl.o
+lib/afl/Makefile
+
+test/output/*
+test/input/*
+
+*.gem
