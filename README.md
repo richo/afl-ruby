@@ -104,3 +104,5 @@ Make sure you have built the extension and patched AFL first, as above.
 # Credits
 
 Substantial portions of afl-ruby are either inspired by, or transposed directly from afl-python by Jakub Wilk <jwilk@jwilk.net> licensed under MIT.
+
+[Stripe](https://stripe.com) allowed both myself and [rob](https://github.com/robert) to spend substantial amounts of company time developing afl-ruby.
