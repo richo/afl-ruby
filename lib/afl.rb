@@ -131,4 +131,4 @@ class AFL
   end
 end
 
-require ::File.expand_path('../afl/afl', __FILE__)
+require 'afl_ext'
