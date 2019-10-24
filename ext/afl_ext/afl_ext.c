@@ -5,6 +5,7 @@
 #include <ruby/st.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdio.h>
 #include <unistd.h>
 
 // These need to be in sync with afl-fuzz
@@ -17,41 +18,68 @@ static unsigned char *afl_area = NULL;
 static VALUE AFL = Qnil;
 static VALUE init_done = Qfalse;
 
-// #define log(...) snprintf(buf, sizeof(buf), __VA_ARGS__); write(logfd, buf, strlen(buf))
-#define log(...)
-int logfd;
-char buf[128];
+#ifdef AFL_RUBY_EXT_DEBUG_LOG
+static FILE *aflogf = NULL;
+
+static void aflogf_init(void) {
+    int fd = open("/tmp/aflog",
+            O_WRONLY | O_CREAT | O_TRUNC,
+            S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        fprintf(stderr, "unable to open() /tmp/aflog\n");
+        _exit(1);
+    }
+
+    aflogf = fdopen(fd, "w");
+    if (!aflogf) {
+        fprintf(stderr, "unable to fdopen() /tmp/aflog\n");
+        _exit(1);
+    }
+}
+
+static void aflog_printf(const char *fmt, ...) {
+    va_list ap;
+
+    if (!aflogf) aflogf_init();
+
+    va_start(ap, fmt);
+    vfprintf(aflogf, fmt, ap);
+    va_end(ap);
+
+    // quiesce aflogf's writer buffer to disk immediately
+    fflush(aflogf);
+}
+
+#define LOG aflog_printf
+#else
+#define LOG(...)
+#endif
 
 /**
  * Returns the location in the AFL shared memory to write the
  * given Ruby trace data to.
  *
- * Borrowed from afl-python for consistency
+ * Borrowed from afl-python for consistency, then refactored
  * https://github.com/jwilk/python-afl/blob/8df6bfefac5de78761254bf5d7724e0a52d254f5/afl.pyx#L74-L87
  */
-inline unsigned int lhash(const char *key, size_t offset) {
-    size_t len = strlen(key);
-    uint32_t h = 0x811C9DC5;
-    while (len > 0) {
-        h ^= (unsigned char) key[0];
-        h *= 0x01000193;
-        len -= 1;
-        key += 1;
-    }
-    while (offset > 0) {
-        h ^= (unsigned char) offset;
-        h *= 0x01000193;
-        offset >>= 8;
-    }
+#define LHASH_INIT       0x811C9DC5
+#define LHASH_MAGIC_MULT 0x01000193
+#define LHASH_NEXT(x)    h = ((h ^ (unsigned char)(x)) * LHASH_MAGIC_MULT)
+
+static inline unsigned int lhash(const char *key, size_t offset) {
+    const char *const last = &key[strlen(key) - 1];
+    uint32_t h = LHASH_INIT;
+    while (key <= last)               LHASH_NEXT(*key++);
+    for (; offset != 0; offset >>= 8) LHASH_NEXT(offset);
     return h;
 }
 
 /**
  * Write Ruby trace data to AFL's shared memory.
  *
- * TODO: link to the AFL code that this is mimicing.
+ * TODO: link to the AFL code that this is mimicking.
  */
-VALUE afl_trace(VALUE _self, VALUE file_name, VALUE line_no) {
+static VALUE afl_trace(VALUE _self, VALUE file_name, VALUE line_no) {
     static int prev_location;
     int offset;
     VALUE exc = rb_const_get(AFL, rb_intern("RuntimeError"));
@@ -63,22 +91,22 @@ VALUE afl_trace(VALUE _self, VALUE file_name, VALUE line_no) {
     char* fname = StringValueCStr(file_name);
     size_t lno = FIX2INT(line_no);
     unsigned int location = lhash(fname, lno) % MAP_SIZE;
-    log("[+] %s:%zu\n", fname, lno);
+    LOG("[+] %s:%zu\n", fname, lno);
 
     offset = location ^ prev_location;
     prev_location = location / 2;
-    log("[!] offset 0x%x\n", offset);
+    LOG("[!] offset 0x%x\n", offset);
     afl_area[offset] += 1;
 
-    log("[-] done with trace");
+    LOG("[-] done with trace");
     return Qtrue;
 }
 
 /**
  * Initialize the AFL forksrv by testing that we can write to it.
  */
-VALUE afl__init_forkserver(void) {
-    log("Testing writing to forksrv fd=%d\n", FORKSRV_FD);
+static VALUE afl__init_forkserver(void) {
+    LOG("Testing writing to forksrv fd=%d\n", FORKSRV_FD);
 
     int ret = write(FORKSRV_FD + 1, "\0\0\0\0", 4);
     if (ret != 4) {
@@ -86,16 +114,16 @@ VALUE afl__init_forkserver(void) {
         rb_raise(exc, "Couldn't write to forksrv");
     }
 
-    log("Successfully wrote out nulls to forksrv ret=%d\n", ret);
+    LOG("Successfully wrote out nulls to forksrv ret=%d\n", ret);
     return Qnil;
 }
 
-VALUE afl__forkserver_read(VALUE _self) {
+static VALUE afl__forkserver_read(VALUE _self) {
     unsigned int value;
     int ret = read(FORKSRV_FD, &value, 4);
-    log("Read from forksrv value=%d ret=%d", value, ret);
+    LOG("Read from forksrv value=%d ret=%d", value, ret);
     if (ret != 4) {
-        log("Couldn't read from forksrv errno=%d", errno);
+        LOG("Couldn't read from forksrv errno=%d", errno);
         VALUE exc = rb_const_get(AFL, rb_intern("RuntimeError"));
         rb_raise(exc, "Couldn't read from forksrv");
     }
@@ -105,11 +133,11 @@ VALUE afl__forkserver_read(VALUE _self) {
 /**
  * Write a value (generally a child_pid) to the AFL forkserver.
  */
-VALUE afl__forkserver_write(VALUE _self, VALUE v) {
+static VALUE afl__forkserver_write(VALUE _self, VALUE v) {
     unsigned int value = FIX2INT(v);
 
     int ret = write(FORKSRV_FD + 1, &value, 4);
-    log("Wrote to forksrv_sock value=%d ret=%d\n", value, ret);
+    LOG("Wrote to forksrv_sock value=%d ret=%d\n", value, ret);
     if (ret != 4) {
         VALUE exc = rb_const_get(AFL, rb_intern("RuntimeError"));
         rb_raise(exc, "Couldn't write to forksrv");
@@ -120,8 +148,8 @@ VALUE afl__forkserver_write(VALUE _self, VALUE v) {
 /**
  *  Initialize AFL's shared memory segment.
  */
-VALUE afl__init_shm(void) {
-    log("Initializing SHM\n");
+static VALUE afl__init_shm(void) {
+    LOG("Initializing SHM\n");
     VALUE exc = rb_const_get(AFL, rb_intern("RuntimeError"));
 
     if (init_done == Qtrue) {
@@ -141,35 +169,37 @@ VALUE afl__init_shm(void) {
     if (afl_area == (void*) -1) {
         rb_raise(exc, "Couldn't map shm segment");
     }
-    log("afl_area at 0x%zx\n", afl_area);
+    LOG("afl_area at 0x%zx\n", afl_area);
 
     init_done = Qtrue;
 
-    log("Done initializing SHM\n");
+    LOG("Done initializing SHM\n");
     return Qtrue;
 }
 
 /**
  * Close the AFL forksrv file descriptors.
  */
-VALUE afl__close_forksrv_fds(VALUE _self) {
+static VALUE afl__close_forksrv_fds(VALUE _self) {
     close(FORKSRV_FD);
     close(FORKSRV_FD + 1);
     return Qnil;
 }
 
-VALUE afl_bail_bang(VALUE _self) {
-    log("bailing\n");
-    close(logfd);
+static VALUE afl_bail_bang(VALUE _self) {
+    LOG("bailing\n");
+#ifdef AFL_RUBY_EXT_DEBUG_LOG
+    if (aflogf) {
+        fclose(aflogf);
+        aflogf = NULL;
+    }
+#endif
     _exit(0);
 }
 
-void Init_afl(void);
-
-void Init_afl(void) {
+void Init_afl_ext(void) {
     AFL = rb_const_get(rb_cObject, rb_intern("AFL"));
-    logfd = open("/tmp/aflog", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    log("...\n");
+    LOG("...\n");
 
     rb_define_module_function(AFL, "trace", afl_trace, 2);
     rb_define_module_function(AFL, "_init_shm", afl__init_shm, 0);
