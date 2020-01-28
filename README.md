@@ -15,7 +15,7 @@ AFL for Ruby! You can learn more about AFL itself [here](http://lcamtuf.coredump
 You will need to manually build the native extension to the Ruby interpreter in order to allow AFL to instrument your Ruby code. To do this:
 
     cd lib/afl
-    ruby ../../ext/afl/extconf.rb
+    ruby ../../ext/afl_ext/extconf.rb
     make
 
 ### 2. Instrument your code
@@ -63,7 +63,7 @@ AFL checks if you're an instrumented binary by seeing if you have the AFL enviro
 
     cd ../afl
     git checkout -b apply-ruby-patch
-    git apply ../afl-fuzz.c.patch
+    git apply ../afl-ruby/afl-fuzz.c.patch
     git add .
     git commit -m "Apply Ruby patch"
     make install
