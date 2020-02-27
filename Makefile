@@ -1,4 +1,4 @@
-VERSION=0.0.0
+VERSION=$(shell ruby -r./lib/afl/version.rb -e 'puts AFL::VERSION')
 
 # Debug pretty printer
 print-%: ; @echo $*=$($*)
