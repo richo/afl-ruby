@@ -61,6 +61,8 @@ end
 
 AFL checks if you're an instrumented binary by seeing if you have the AFL environment variable anywhere in your binary. We're using a bog stock ruby interpreter, so we can't do that. Apply `afl-fuzz.c.patch` before building AFL to remove this check. Assuming you have cloned `afl` and `afl-ruby` in the same directory (i.e. in `~/MYCODE/afl` and `~/MYCODE/afl-ruby`) you can do this by:
 
+More or less any version of AFL should work (it's been a long time since afl-ruby used any new functionality in AFL) but at time of writing 2.52b was current at http://lcamtuf.coredump.cx/afl/releases/afl-latest.tgz or the mirror on [github][github-afl] should always work.
+
     cd ../afl
     git checkout -b apply-ruby-patch
     git apply ../afl-ruby/afl-fuzz.c.patch
@@ -106,3 +108,5 @@ Make sure you have built the extension and patched AFL first, as above.
 Substantial portions of afl-ruby are either inspired by, or transposed directly from afl-python by Jakub Wilk <jwilk@jwilk.net> licensed under MIT.
 
 [Stripe](https://stripe.com) allowed both myself and [rob](https://github.com/robert) to spend substantial amounts of company time developing afl-ruby.
+
+[github-afl]:https://github.com/google/AFL
