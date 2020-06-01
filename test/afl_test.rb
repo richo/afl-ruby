@@ -14,6 +14,7 @@ describe AFL do
   before do
     @env = {
       'AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES' => '1',
+      'AFL_SKIP_BIN_CHECK' => '1',
     }
     @input_dir = File.expand_path('input', __dir__)
     @output_dir = File.expand_path('output', __dir__)
