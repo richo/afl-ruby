@@ -57,26 +57,17 @@ AFL.with_exceptions_as_crashes do
 end
 ```
 
-### 3. Patch AFL
+### 3. Install AFL
 
-AFL checks if you're an instrumented binary by seeing if you have the AFL environment variable anywhere in your binary. We're using a bog stock ruby interpreter, so we can't do that. Apply `afl-fuzz.c.patch` before building AFL to remove this check. Assuming you have cloned `afl` and `afl-ruby` in the same directory (i.e. in `~/MYCODE/afl` and `~/MYCODE/afl-ruby`) you can do this by:
-
-More or less any version of AFL should work (it's been a long time since afl-ruby used any new functionality in AFL) but at time of writing 2.52b was current at http://lcamtuf.coredump.cx/afl/releases/afl-latest.tgz or the mirror on [github][github-afl] should always work.
-
-    cd ../afl
-    git checkout -b apply-ruby-patch
-    git apply ../afl-ruby/afl-fuzz.c.patch
-    git add .
-    git commit -m "Apply Ruby patch"
-    make install
-    # Check that this did indeed update your AFL
-    ls -la $(which afl-fuzz)
+https://github.com/google/AFL
 
 ### 4. Run the example
 
-You should then be able to run the sample harness in the `example/` directory:
+You should then be able to run the sample harness in the `example/` directory.
 
-    /path/to/afl/afl-fuzz -i example/work/input -o example/work/output -- /usr/bin/ruby example/harness.rb
+Because we're using a bog stock ruby interpreter, we must set the environment variable `AFL_SKIP_BIN_CHECK=1` to prevent AFL from checking to see if our binary is instrumented.
+
+    AFL_SKIP_BIN_CHECK=1 /path/to/afl/afl-fuzz -i example/work/input -o example/work/output -- /usr/bin/ruby example/harness.rb
 
 It should only take a few seconds to find a crash. Once a crash is found it should be written to `example/work/output/crashes/` for you to inspect.
 
@@ -87,7 +78,7 @@ If AFL complains that `Program '/usr/bin/ruby' is not a 64-bit Mach-O binary` th
     # Find out which versions rbenv has available
     ls ~/.rbenv/versions
     # Pick an available version, then run something like this:
-    /path/to/afl/afl-fuzz -i work/input -o work/output -- ~/.rbenv/versions/2.4.1/bin/ruby harness.rb
+    AFL_SKIP_BIN_CHECK=1 /path/to/afl/afl-fuzz -i work/input -o work/output -- ~/.rbenv/versions/2.4.1/bin/ruby harness.rb
 
 # Developing
 
@@ -101,7 +92,7 @@ To run the basic test suite, simply run:
 
     rake test
 
-Make sure you have built the extension and patched AFL first, as above.
+Make sure you have built the extension first, as above.
 
 # Credits
 
