@@ -199,6 +199,7 @@ static VALUE afl_bail_bang(VALUE _self) {
 
 void Init_afl_ext(void) {
     AFL = rb_const_get(rb_cObject, rb_intern("AFL"));
+    rb_gc_register_mark_object(AFL);
     LOG("...\n");
 
     rb_define_module_function(AFL, "trace", afl_trace, 2);
